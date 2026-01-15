@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  View, Text, TextInput, TouchableOpacity, StyleSheet, 
-  SafeAreaView, KeyboardAvoidingView, Platform, StatusBar, Alert, ActivityIndicator 
+import {
+  View, Text, TextInput, TouchableOpacity, StyleSheet,
+  KeyboardAvoidingView, Platform, StatusBar, Alert, ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, signOut } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore'; 
+import { doc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function LoginScreen() {
   const [role, setRole] = useState('student');
@@ -25,87 +26,87 @@ export default function LoginScreen() {
 
   const handleAuth = async () => {
     if (!email || !password) {
-        Alert.alert("Kujdes", "Ju lutem plotësoni fushat.");
-        return;
+      Alert.alert("Kujdes", "Ju lutem plotësoni fushat.");
+      return;
     }
 
     setLoading(true);
 
     try {
-        if (isRegistering) {
-            // --- REGJISTRIMI ---
-            
-            // 1. Kontrolli i domenit
-            if (role === 'student' && !email.trim().toLowerCase().endsWith('@umib.net')) {
-                setLoading(false);
-                Alert.alert("Gabim", "Studentët duhet të kenë email zyrtar (@umib.net).");
-                return;
-            }
+      if (isRegistering) {
+        // --- REGJISTRIMI ---
 
-            // 2. Krijo Userin
-            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-            const user = userCredential.user;
-
-            // 3. Ruaj në Database
-            await setDoc(doc(db, "users", user.uid), {
-                email: user.email,
-                role: role,
-                createdAt: new Date(),
-                isProfileComplete: false
-            });
-
-            // 4. Dërgo Emailin (e mbrojtur që të mos bllokohet)
-            try {
-                await sendEmailVerification(user);
-            } catch (emailErr) {
-                console.log("Email error:", emailErr);
-                // Vazhdojmë edhe nëse emaili dështon momentalisht
-            }
-
-            // 5. NDALO LOAD & BEJ LOGOUT
-            setLoading(false);
-            
-            // Bëjmë logout manualisht këtu pasi kemi mbaruar punë
-            await signOut(auth);
-
-            Alert.alert(
-                "Llogaria u krijua! 📧", 
-                `Një email verifikimi u dërgua në ${email}.\nKontrolloni Inbox ose Spam dhe klikoni linkun.`,
-                [{ text: "OK", onPress: () => setIsRegistering(false) }]
-            );
-
-        } else {
-            // --- LOGIN ---
-            const userCredential = await signInWithEmailAndPassword(auth, email, password);
-            const user = userCredential.user;
-
-            await user.reload(); // Rifresko statusin e userit
-
-            if (!user.emailVerified) {
-                setLoading(false);
-                await signOut(auth); // E nxjerrim jashtë
-                Alert.alert(
-                    "E pa verifikuar", 
-                    "Ju lutem verifikoni emailin tuaj para se të hyni.",
-                    [{ text: "OK" }]
-                );
-                return;
-            }
-
-            // Hyrja me sukses
-            setLoading(false);
+        // 1. Kontrolli i domenit
+        if (role === 'student' && !email.trim().toLowerCase().endsWith('@umib.net')) {
+          setLoading(false);
+          Alert.alert("Gabim", "Studentët duhet të kenë email zyrtar (@umib.net).");
+          return;
         }
 
-    } catch (error) {
+        // 2. Krijo Userin
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
+
+        // 3. Ruaj në Database
+        await setDoc(doc(db, "users", user.uid), {
+          email: user.email,
+          role: role,
+          createdAt: new Date(),
+          isProfileComplete: false
+        });
+
+        // 4. Dërgo Emailin (e mbrojtur që të mos bllokohet)
+        try {
+          await sendEmailVerification(user);
+        } catch (emailErr) {
+          console.log("Email error:", emailErr);
+          // Vazhdojmë edhe nëse emaili dështon momentalisht
+        }
+
+        // 5. NDALO LOAD & BEJ LOGOUT
         setLoading(false);
-        console.error("AUTH Error:", error);
-        
-        let msg = error.message;
-        if (msg.includes("email-already-in-use")) msg = "Kjo email adresë është e zënë.";
-        if (msg.includes("wrong-password")) msg = "Fjalëkalim i gabuar.";
-        if (msg.includes("user-not-found")) msg = "Përdoruesi nuk u gjet.";
-        
-        Alert.alert("Gabim", msg);
+
+        // Bëjmë logout manualisht këtu pasi kemi mbaruar punë
+        await signOut(auth);
+
+        Alert.alert(
+          "Llogaria u krijua! 📧",
+          `Një email verifikimi u dërgua në ${email}.\nKontrolloni Inbox ose Spam dhe klikoni linkun.`,
+          [{ text: "OK", onPress: () => setIsRegistering(false) }]
+        );
+
+      } else {
+        // --- LOGIN ---
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
+
+        await user.reload(); // Rifresko statusin e userit
+
+        if (!user.emailVerified) {
+          setLoading(false);
+          await signOut(auth); // E nxjerrim jashtë
+          Alert.alert(
+            "E pa verifikuar",
+            "Ju lutem verifikoni emailin tuaj para se të hyni.",
+            [{ text: "OK" }]
+          );
+          return;
+        }
+
+        // Hyrja me sukses
+        setLoading(false);
+      }
+
+    } catch (error) {
+      setLoading(false);
+      console.error("AUTH Error:", error);
+
+      let msg = error.message;
+      if (msg.includes("email-already-in-use")) msg = "Kjo email adresë është e zënë.";
+      if (msg.includes("wrong-password")) msg = "Fjalëkalim i gabuar.";
+      if (msg.includes("user-not-found")) msg = "Përdoruesi nuk u gjet.";
+
+      Alert.alert("Gabim", msg);
     }
   };
 
@@ -126,22 +127,22 @@ export default function LoginScreen() {
 
           {isRegistering && (
             <View style={styles.roleContainer}>
-                <TouchableOpacity style={[styles.roleCard, role === 'student' ? { borderColor: colors.primary, backgroundColor: '#EFF6FF' } : { borderColor: 'transparent' }]} onPress={() => setRole('student')}>
-                    <Ionicons name="school" size={24} color={role === 'student' ? colors.primary : '#64748B'} />
-                    <Text style={[styles.roleText, { color: role === 'student' ? colors.primary : colors.subText }]}>Student</Text>
-                </TouchableOpacity>
+              <TouchableOpacity style={[styles.roleCard, role === 'student' ? { borderColor: colors.primary, backgroundColor: '#EFF6FF' } : { borderColor: 'transparent' }]} onPress={() => setRole('student')}>
+                <Ionicons name="school" size={24} color={role === 'student' ? colors.primary : '#64748B'} />
+                <Text style={[styles.roleText, { color: role === 'student' ? colors.primary : colors.subText }]}>Student</Text>
+              </TouchableOpacity>
 
-                <TouchableOpacity style={[styles.roleCard, role === 'employer' ? { borderColor: colors.primary, backgroundColor: '#EFF6FF' } : { borderColor: 'transparent' }]} onPress={() => setRole('employer')}>
-                    <Ionicons name="briefcase" size={24} color={role === 'employer' ? colors.primary : '#64748B'} />
-                    <Text style={[styles.roleText, { color: role === 'employer' ? colors.primary : colors.subText }]}>Employer</Text>
-                </TouchableOpacity>
+              <TouchableOpacity style={[styles.roleCard, role === 'employer' ? { borderColor: colors.primary, backgroundColor: '#EFF6FF' } : { borderColor: 'transparent' }]} onPress={() => setRole('employer')}>
+                <Ionicons name="briefcase" size={24} color={role === 'employer' ? colors.primary : '#64748B'} />
+                <Text style={[styles.roleText, { color: role === 'employer' ? colors.primary : colors.subText }]}>Employer</Text>
+              </TouchableOpacity>
             </View>
           )}
 
           <View style={styles.formContainer}>
             <View style={[styles.inputContainer, { backgroundColor: colors.inputBg }]}>
-              <Ionicons name="mail-outline" size={20} color={colors.subText} style={{marginRight: 10}} />
-              <TextInput 
+              <Ionicons name="mail-outline" size={20} color={colors.subText} style={{ marginRight: 10 }} />
+              <TextInput
                 placeholder={role === 'student' && isRegistering ? "email@umib.net" : "Email"}
                 placeholderTextColor={colors.subText}
                 style={styles.input}
@@ -152,8 +153,8 @@ export default function LoginScreen() {
             </View>
 
             <View style={[styles.inputContainer, { backgroundColor: colors.inputBg }]}>
-              <Ionicons name="lock-closed-outline" size={20} color={colors.subText} style={{marginRight: 10}} />
-              <TextInput 
+              <Ionicons name="lock-closed-outline" size={20} color={colors.subText} style={{ marginRight: 10 }} />
+              <TextInput
                 placeholder="Fjalëkalimi"
                 placeholderTextColor={colors.subText}
                 style={styles.input}
@@ -168,10 +169,15 @@ export default function LoginScreen() {
             </TouchableOpacity>
 
             <View style={styles.footer}>
-              <Text style={{color: colors.subText}}>{isRegistering ? "Keni llogari? " : "Nuk keni llogari? "}</Text>
-              <TouchableOpacity onPress={() => setIsRegistering(!isRegistering)}>
-                <Text style={{color: colors.primary, fontWeight: 'bold'}}>{isRegistering ? "Hyni" : "Regjistrohuni"}</Text>
-              </TouchableOpacity>
+              <Text style={{ color: colors.subText }}>
+                {isRegistering ? "Keni llogari? " : "Nuk keni llogari? "}
+                <Text
+                  style={{ color: colors.primary, fontWeight: 'bold' }}
+                  onPress={() => setIsRegistering(!isRegistering)}
+                >
+                  {isRegistering ? "Hyni" : "Regjistrohuni"}
+                </Text>
+              </Text>
             </View>
           </View>
         </View>
