@@ -18,4 +18,4 @@ Një aplikacion React Native për menaxhimin e detyrave, i ndërtuar me Expo dhe
 3. Nisni aplikacionin: `npx expo start`
 
 ## 👤 Autori
-- Krijuar nga [Emri Yt]
+- Krijuar nga Agnesa Maxhuni
