@@ -1,6 +1,8 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+
+// Importojmë ekranet nga i njëjti folder
 import HomeScreen from './HomeScreen';
 import ProfileScreen from './ProfileScreen';
 import ApplicationsScreen from './ApplicationsScreen';
@@ -12,7 +14,7 @@ export default function MainLayout() {
         <Tab.Navigator
             screenOptions={({ route }) => ({
                 headerShown: false,
-                tabBarShowLabel: true, // E KTHYEM TEKSTIN
+                tabBarShowLabel: true,
                 tabBarStyle: {
                     backgroundColor: '#FFFFFF',
                     borderTopWidth: 0,
@@ -21,16 +23,16 @@ export default function MainLayout() {
                     shadowOffset: { width: 0, height: -2 },
                     shadowOpacity: 0.05,
                     shadowRadius: 10,
-                    height: 65, // Lartësia ok për ikonë + tekst
-                    paddingBottom: 8, // Hapësirë që teksti mos të prekë fundin
+                    height: 65,
+                    paddingBottom: 8,
                     paddingTop: 8,
                 },
-                tabBarActiveTintColor: '#2563EB', // Bluja jonë zyrtare
-                tabBarInactiveTintColor: '#94A3B8', // Gri moderne
+                tabBarActiveTintColor: '#2563EB',
+                tabBarInactiveTintColor: '#94A3B8',
                 tabBarLabelStyle: {
                     fontSize: 12,
                     fontWeight: '600',
-                    marginTop: -2, // E afron pak tekstin me ikonën
+                    marginTop: -2,
                 },
                 tabBarIcon: ({ focused, color, size }) => {
                     let iconName;
@@ -50,7 +52,7 @@ export default function MainLayout() {
             <Tab.Screen
                 name="Home"
                 component={HomeScreen}
-                options={{ title: 'Jobs' }} // Më mirë "Jobs" se "Home" për kontekst
+                options={{ title: 'Jobs' }}
             />
             <Tab.Screen
                 name="Applications"

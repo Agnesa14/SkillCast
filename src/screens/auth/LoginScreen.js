@@ -6,7 +6,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, signOut } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
-import { auth, db } from '../config/firebase';
+import { auth, db } from '../../config/firebase'; // ✅ Saktë
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function LoginScreen() {

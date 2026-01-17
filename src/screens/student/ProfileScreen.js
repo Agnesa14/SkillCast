@@ -4,7 +4,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { auth } from '../config/firebase';
+import { auth } from '../../config/firebase';
 
 const STUDENT = {
     name: auth.currentUser?.displayName || "Agnesa Student",

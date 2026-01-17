@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native'; // <--- 1. Importojmë Hook-un e navigimit
-import { auth, db } from '../config/firebase';
+import { useNavigation } from '@react-navigation/native'; 
+import { auth, db } from '../../config/firebase'; // ✅ Path-i është i saktë
 import { collection, query, where, onSnapshot, orderBy, deleteDoc, doc } from 'firebase/firestore';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function ApplicationsScreen() {
-    const navigation = useNavigation(); // <--- 2. E aktivizojmë këtu
+    const navigation = useNavigation(); 
     const [applications, setApplications] = useState([]);
     const [loading, setLoading] = useState(true);
     const user = auth.currentUser;
@@ -75,10 +75,10 @@ export default function ApplicationsScreen() {
                     id: item.jobId,
                     title: item.jobTitle,
                     company: item.companyName,
-                    location: item.location || 'See details', // <--- E re (lexon location e ruajtur)
+                    location: item.location || 'See details', 
                     type: 'Applied',
-                    salary: item.salary || '-', // <--- E re (lexon rrogën e ruajtur)
-                    tags: item.tags || [] // <--- KRYESORJA: Lexon tags nëse ekzistojnë në database
+                    salary: item.salary || '-', 
+                    tags: item.tags || [] 
                 };
                 // Tani 'navigation' ekziston dhe nuk do japë error
                 navigation.navigate('JobDetails', { job: jobData });

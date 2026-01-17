@@ -8,19 +8,18 @@ import {
     TouchableOpacity,
     TextInput,
     Image,
-    ScrollView // Shtuar për filter chips horizontal
+    ScrollView 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { auth } from '../config/firebase';
+import { auth } from '../../config/firebase'; // ✅ Rruga e saktë
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-// --- DUMMY DATA (Më vonë këto vijnë nga Firebase 'jobs' collection) ---
-// --- DUMMY DATA ME DETAJE KOMPANIE ---
+// --- DUMMY DATA ---
 const JOBS = [
     {
         id: '1',
         company: 'Gjirafa Inc.',
-        logo: 'https://gjirafa.com/assets/images/gjirafa-logo.png', // Ose lëre bosh nëse s'ke logo URL
+        logo: 'https://gjirafa.com/assets/images/gjirafa-logo.png',
         title: 'Junior React Developer',
         location: 'Prishtinë (On-site)',
         type: 'Internship',
@@ -29,7 +28,6 @@ const JOBS = [
         category: 'Development',
         isRemote: false,
         posted: '2 days ago',
-        // --- TË REJA ---
         aboutCompany: 'Gjirafa is the fastest growing tech company in the Balkans, focusing on e-commerce, video streaming, and online advertising.',
         website: 'www.gjirafa.com',
         email: 'careers@gjirafa.com',
@@ -88,19 +86,17 @@ const JOBS = [
     }
 ];
 
-// Kategoritë për filtrim të shpejtë
 const FILTERS = ["All", "Remote", "Paid", "Development", "Design"];
 
 export default function HomeScreen({ navigation }) {
     const user = auth.currentUser;
 
-    // States për Search dhe Filter
     const [search, setSearch] = useState('');
     const [activeFilter, setActiveFilter] = useState('All');
     const [filteredJobs, setFilteredJobs] = useState(JOBS);
     const [greeting, setGreeting] = useState('Hello');
 
-    // 1. Logjika për Përshëndetjen (Time-based greeting)
+    // 1. Logjika për Përshëndetjen
     useEffect(() => {
         const hours = new Date().getHours();
         if (hours < 12) setGreeting('Good Morning');
@@ -108,23 +104,22 @@ export default function HomeScreen({ navigation }) {
         else setGreeting('Good Evening');
     }, []);
 
-    // 2. Logjika e Filterimit dhe Search (Kjo është zemra e kërkimit)
+    // 2. Logjika e Filterimit dhe Search
     useEffect(() => {
         let result = JOBS;
 
-        // a) Filtro sipas Kategorisë (Chips)
+        // a) Filtro sipas Kategorisë
         if (activeFilter !== 'All') {
             if (activeFilter === 'Remote') {
                 result = result.filter(job => job.isRemote);
             } else if (activeFilter === 'Paid') {
                 result = result.filter(job => job.salary !== 'Unpaid');
             } else {
-                // Për Development, Design, etj.
                 result = result.filter(job => job.category === activeFilter);
             }
         }
 
-        // b) Filtro sipas Tekstit (Search Bar)
+        // b) Filtro sipas Tekstit
         if (search) {
             const text = search.toLowerCase();
             result = result.filter(job =>
@@ -145,6 +140,7 @@ export default function HomeScreen({ navigation }) {
         >
             <View style={styles.cardHeader}>
                 <View style={styles.logoContainer}>
+                    {/* Nëse ka logo URL, mund të shtosh Image component këtu, përndryshe shfaq shkronjën */}
                     <Text style={styles.logoText}>{item.company.charAt(0)}</Text>
                 </View>
 
@@ -164,7 +160,7 @@ export default function HomeScreen({ navigation }) {
 
             <View style={styles.cardFooter}>
                 <View style={styles.tagsContainer}>
-                    {item.tags.slice(0, 3).map((tag, index) => ( // Shfaqim max 3 tags mos të prishet UI
+                    {item.tags.slice(0, 3).map((tag, index) => (
                         <View key={index} style={styles.tag}>
                             <Text style={styles.tagText}>{tag}</Text>
                         </View>
@@ -179,14 +175,14 @@ export default function HomeScreen({ navigation }) {
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="dark-content" />
 
-            {/* HEADER I PËRMIRËSUAR */}
+            {/* HEADER */}
             <View style={styles.header}>
                 <View>
                     <Text style={styles.greeting}>{greeting}, {user?.displayName ? user.displayName.split(' ')[0] : 'Student'} 👋</Text>
                     <Text style={styles.subTitle}>Let's find your dream career.</Text>
                 </View>
                 <TouchableOpacity style={styles.notifButton}>
-                    <View style={styles.badge} /> {/* Pika e kuqe nese ka njoftim */}
+                    <View style={styles.badge} />
                     <Ionicons name="notifications-outline" size={24} color="#1E293B" />
                 </TouchableOpacity>
             </View>
@@ -209,7 +205,6 @@ export default function HomeScreen({ navigation }) {
                     )}
                 </View>
 
-                {/* CHIPS FILTER (Horizontal Scroll) */}
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterContainer}>
                     {FILTERS.map((filter) => (
                         <TouchableOpacity
@@ -263,7 +258,7 @@ const styles = StyleSheet.create({
 
     // Header Styles
     header: { padding: 24, paddingBottom: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FFF' },
-    greeting: { fontSize: 22, fontWeight: '800', color: '#1E293B' }, // Pak më e vogël por më e trashë
+    greeting: { fontSize: 22, fontWeight: '800', color: '#1E293B' },
     subTitle: { fontSize: 14, color: '#64748B', marginTop: 2 },
     notifButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' },
     badge: { position: 'absolute', top: 10, right: 10, width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444', zIndex: 10 },
