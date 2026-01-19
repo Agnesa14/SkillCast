@@ -5,6 +5,7 @@ import {
   getAuth 
 } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
+import { getStorage } from "firebase/storage"; // ✅ SHTESË: Na duhet për foto/CV
 import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 
 const firebaseConfig = {
@@ -17,22 +18,27 @@ const firebaseConfig = {
   measurementId: "G-PXM0136K5N"
 };
 
-// Inicializimi i App
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+// 1. Inicializimi i App (Singleton Pattern)
+let app;
+let auth;
 
-// Inicializimi i Auth - kjo pjesë shuan Warning-un
-const auth = (() => {
-  try {
-    // Provojmë të inicializojmë me persistence
-    return initializeAuth(app, {
-      persistence: getReactNativePersistence(ReactNativeAsyncStorage),
-    });
-  } catch (error) {
-    // Nëse është inicializuar një herë, kthejmë atë ekzistuesin
-    return getAuth(app);
-  }
-})();
+if (getApps().length === 0) {
+  // Hera e parë që hapet aplikacioni
+  app = initializeApp(firebaseConfig);
+  
+  // Inicializojmë Auth me Persistence (që useri të rrijë logged in)
+  auth = initializeAuth(app, {
+    persistence: getReactNativePersistence(ReactNativeAsyncStorage),
+  });
+} else {
+  // Nëse aplikacioni është tashmë i hapur (hot reload)
+  app = getApp();
+  auth = getAuth(app);
+}
 
+// 2. Inicializimi i Shërbimeve të tjera
 const db = getFirestore(app);
+const storage = getStorage(app); // ✅ E gatshme për përdorim të mëvonshëm
 
-export { auth, db };
+// 3. Eksportojmë gjithçka që na duhet
+export { auth, db, storage };

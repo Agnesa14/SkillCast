@@ -1,263 +1,401 @@
-import React from 'react';
-import {
-    View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Linking
+import React, { useState, useEffect } from 'react';
+import { 
+  View, Text, TextInput, StyleSheet, TouchableOpacity, 
+  ScrollView, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, Modal, Linking, FlatList 
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { auth } from '../../config/firebase';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { auth, db } from '../../config/firebase'; 
 
-const STUDENT = {
-    name: auth.currentUser?.displayName || "Agnesa Student",
-    university: "Universiteti i Prishtinës",
-    major: "Computer Science & Engineering",
-    bio: "Aspiring Mobile Developer passionate about React Native and UI Design. Building things that matter.",
-    location: "Prishtinë, Kosovë",
-    github: "https://github.com",
-    linkedin: "https://linkedin.com",
+// Lista e paracaktuar e skills për sugjerim
+const SUGGESTED_SKILLS = [
+  "React Native", "JavaScript", "Python", "Node.js", "Figma", 
+  "UI/UX", "Firebase", "SQL", "Git", "Java", "C#", "Flutter"
+];
 
-    skills: ["React Native", "JavaScript", "Firebase", "Figma", "Git", "Python", "UI/UX"],
-
-    projects: [
-        {
-            id: 1,
-            title: "Weather App",
-            description: "Real-time weather tracking with geolocation and live updates.",
-            tech: ["React Native", "API"],
-            image: "https://cdn.dribbble.com/users/1615584/screenshots/14637278/media/e13ba3764646456c36352d53016fb0e0.jpg",
-            githubLink: "https://github.com",
-            demoLink: null
-        },
-        {
-            id: 2,
-            title: "Fashion E-Commerce",
-            description: "Modern shopping app with cart, favorites, and payment integration.",
-            tech: ["React", "Node.js"],
-            image: "https://cdn.dribbble.com/users/2401147/screenshots/15567995/media/6991505e1c8f02138566e38392c41505.png",
-            githubLink: "https://github.com",
-            demoLink: "https://youtube.com"
-        },
-        {
-            id: 3,
-            title: "Task Master",
-            description: "A productivity app to organize daily tasks and boost efficiency.",
-            tech: ["Flutter", "Firebase"],
-            image: "https://cdn.dribbble.com/users/702789/screenshots/14053258/media/501944935a57637b694050114c347640.png",
-            githubLink: "https://github.com",
-            demoLink: null
-        },
-        {
-            id: 4,
-            title: "Crypto Tracker",
-            description: "Live cryptocurrency prices and portfolio management.",
-            tech: ["React Native", "CoinGecko API"],
-            image: "https://cdn.dribbble.com/users/5031392/screenshots/15467626/media/26dd22806326bb6f1113001125b807e0.png",
-            githubLink: "https://github.com",
-            demoLink: null
-        },
-        {
-            id: 5,
-            title: "Healthy Recipes",
-            description: "Find delicious recipes based on ingredients you have.",
-            tech: ["React", "Spoonacular API"],
-            image: "https://cdn.dribbble.com/users/1615584/screenshots/15710309/media/9d67ba5b9bc65ae64b77a72d3f66c0b3.jpg",
-            githubLink: "https://github.com",
-            demoLink: null
-        },
-        {
-            id: 6,
-            title: "FitnessPal Clone",
-            description: "Workout tracker and calorie counter application.",
-            tech: ["Swift", "HealthKit"],
-            image: "https://cdn.dribbble.com/users/2064121/screenshots/16301138/media/131464303f721e8d4793f0648c081373.png",
-            githubLink: "https://github.com",
-            demoLink: null
-        }
-    ],
-
-    certificates: [
-        { title: "React Native Bootcamp", issuer: "Udemy", date: "Jan 2024" },
-        { title: "Advanced CSS & Sass", issuer: "Coursera", date: "Dec 2023" },
-        { title: "UX Design Fundamentals", issuer: "Google", date: "Nov 2023" }
-    ]
-};
+// Ngjyra pastel për cover-at e projekteve (për bukuri vizuale)
+const PROJECT_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#6366F1'];
 
 export default function ProfileScreen({ navigation }) {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
 
-    const openLink = (url) => {
-        if (url) Linking.openURL(url);
+  // --- USER DATA ---
+  const [name, setName] = useState('');
+  const [headline, setHeadline] = useState('');
+  const [about, setAbout] = useState('');
+  
+  // --- SKILLS LOGIC (NEW 🧠) ---
+  const [skillsArray, setSkillsArray] = useState([]);
+  const [skillInput, setSkillInput] = useState(''); // Për kërkim/shtim
+
+  // --- PROJECTS STATE ---
+  const [projects, setProjects] = useState([]); 
+  const [isProjectModalVisible, setProjectModalVisible] = useState(false);
+  
+  const [newProject, setNewProject] = useState({
+    title: '', desc: '', tech: '', demoLink: '', repoLink: ''
+  });
+
+  const user = auth.currentUser;
+
+  useEffect(() => { fetchUserData(); }, []);
+
+  const fetchUserData = async () => {
+    if (!user) return;
+    try {
+      const docRef = doc(db, "users", user.uid);
+      const docSnap = await getDoc(docRef);
+
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setName(data.displayName || '');
+        setHeadline(data.headline || '');
+        setAbout(data.about || '');
+        setSkillsArray(Array.isArray(data.skills) ? data.skills : []);
+        setProjects(Array.isArray(data.projects) ? data.projects : []);
+      }
+    } catch (error) {
+      console.error("Error fetching profile:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // --- SAVE PROFILE ---
+  const handleSaveProfile = async () => {
+    setSaving(true);
+    try {
+      const userRef = doc(db, "users", user.uid);
+      await updateDoc(userRef, {
+        displayName: name.trim(),
+        headline: headline.trim(),
+        about: about.trim(),
+        skills: skillsArray,
+        updatedAt: new Date(),
+      });
+      setIsEditing(false);
+      Alert.alert("Success", "Profile updated successfully! 🚀");
+    } catch (error) {
+      Alert.alert("Error", "Failed to save profile.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // --- SKILLS HANDLERS ---
+  const addSkill = (skill) => {
+    if (!skillsArray.includes(skill)) {
+      setSkillsArray([...skillsArray, skill]);
+    }
+    setSkillInput('');
+  };
+
+  const removeSkill = (skillToRemove) => {
+    setSkillsArray(skillsArray.filter(skill => skill !== skillToRemove));
+  };
+
+  // --- PROJECT HANDLERS ---
+  const handleAddProject = async () => {
+    if (!newProject.title || !newProject.desc) {
+      Alert.alert("Missing Info", "Title and Description are required.");
+      return;
+    }
+
+    // Zgjedhim një ngjyrë random për cover
+    const randomColor = PROJECT_COLORS[Math.floor(Math.random() * PROJECT_COLORS.length)];
+
+    const projectItem = {
+      id: Date.now().toString(),
+      title: newProject.title,
+      desc: newProject.desc,
+      tech: newProject.tech,
+      demoLink: newProject.demoLink,
+      repoLink: newProject.repoLink,
+      color: randomColor // Ruajmë ngjyrën për konsistencë
     };
 
-    const handleLogout = () => {
-        auth.signOut().catch(err => console.log(err));
-    };
+    const updatedProjects = [projectItem, ...projects]; // Add to top
+    setProjects(updatedProjects);
+    
+    try {
+        const userRef = doc(db, "users", user.uid);
+        await updateDoc(userRef, { projects: updatedProjects });
+        setProjectModalVisible(false);
+        setNewProject({ title: '', desc: '', tech: '', demoLink: '', repoLink: '' });
+    } catch (e) {
+        Alert.alert("Error", "Could not save project.");
+    }
+  };
 
-    return (
-        <SafeAreaView style={styles.container}>
-            <ScrollView contentContainerStyle={styles.content}>
+  const handleDeleteProject = async (projectId) => {
+    Alert.alert("Delete Project", "Are you sure?", [
+        { text: "Cancel" },
+        { 
+            text: "Delete", style: "destructive", 
+            onPress: async () => {
+                const updatedProjects = projects.filter(p => p.id !== projectId);
+                setProjects(updatedProjects);
+                await updateDoc(doc(db, "users", user.uid), { projects: updatedProjects });
+            }
+        }
+    ]);
+  };
 
-                {/* --- HEADER --- */}
-                <View style={styles.header}>
-                    <Image
-                        source={{ uri: "https://img.freepik.com/free-psd/3d-illustration-person-with-sunglasses_23-2149436188.jpg" }}
-                        style={styles.avatar}
-                    />
-                    <Text style={styles.name}>{STUDENT.name}</Text>
-                    <Text style={styles.uni}>{STUDENT.major} @ {STUDENT.university}</Text>
+  const openLink = (url) => {
+    if (url) Linking.openURL(url).catch(err => console.error("Error", err));
+  };
 
-                    <View style={styles.locationTag}>
-                        <Ionicons name="location-sharp" size={14} color="#64748B" />
-                        <Text style={styles.locationText}>{STUDENT.location}</Text>
-                    </View>
+  if (loading) return <View style={styles.center}><ActivityIndicator size="large" color="#2563EB"/></View>;
 
-                    <Text style={styles.bioText}>{STUDENT.bio}</Text>
+  return (
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          
+          {/* HEADER */}
+          <View style={styles.header}>
+            <View>
+              <Text style={styles.headerTitle}>Profile</Text>
+              <Text style={styles.headerSubtitle}>Make it shine ✨</Text>
+            </View>
+            <TouchableOpacity onPress={() => auth.signOut()} style={styles.logoutBtn}>
+              <Ionicons name="log-out-outline" size={20} color="#EF4444" />
+            </TouchableOpacity>
+          </View>
 
-                    <View style={styles.socialRow}>
-                        {Boolean(STUDENT.github) && (
-                            <TouchableOpacity style={styles.socialBtn} onPress={() => openLink(STUDENT.github)}>
-                                <Ionicons name="logo-github" size={20} color="#333" />
-                            </TouchableOpacity>
-                        )}
-                        {Boolean(STUDENT.linkedin) && (
-                            <TouchableOpacity style={styles.socialBtn} onPress={() => openLink(STUDENT.linkedin)}>
-                                <Ionicons name="logo-linkedin" size={20} color="#0077B5" />
-                            </TouchableOpacity>
-                        )}
-                        <TouchableOpacity style={styles.socialBtn}>
-                            <Ionicons name="mail" size={20} color="#EA4335" />
+          {/* --- MAIN PROFILE CARD --- */}
+          <View style={styles.card}>
+            <View style={styles.profileHeader}>
+                <View style={styles.avatar}><Text style={styles.avatarText}>{name.charAt(0)}</Text></View>
+                <View style={{flex:1}}>
+                    {isEditing ? (
+                        <>
+                            <TextInput style={styles.editInput} value={name} onChangeText={setName} placeholder="Full Name"/>
+                            <TextInput style={styles.editInput} value={headline} onChangeText={setHeadline} placeholder="Title (e.g. Junior Dev)"/>
+                        </>
+                    ) : (
+                        <>
+                            <Text style={styles.nameText}>{name}</Text>
+                            <Text style={styles.headlineText}>{headline || "No headline yet"}</Text>
+                        </>
+                    )}
+                </View>
+                <TouchableOpacity onPress={() => isEditing ? handleSaveProfile() : setIsEditing(true)} style={styles.editBtn}>
+                    <Ionicons name={isEditing ? "checkmark" : "create-outline"} size={20} color="#FFF" />
+                </TouchableOpacity>
+            </View>
+
+            {/* About Section */}
+            <View style={styles.divider} />
+            <Text style={styles.sectionTitle}>About Me</Text>
+            {isEditing ? (
+                <TextInput style={[styles.editInput, styles.textArea]} multiline value={about} onChangeText={setAbout} placeholder="Tell employers about yourself..."/>
+            ) : (
+                <Text style={styles.bodyText}>{about || "Add a short bio to introduce yourself."}</Text>
+            )}
+
+            {/* --- SKILLS SECTION (IMPROVED 🧠) --- */}
+            <Text style={[styles.sectionTitle, {marginTop: 20}]}>Skills</Text>
+            
+            <View style={styles.skillsWrapper}>
+                {skillsArray.map((skill, index) => (
+                    <TouchableOpacity key={index} style={styles.skillChip} onPress={() => isEditing && removeSkill(skill)}>
+                        <Text style={styles.skillText}>{skill}</Text>
+                        {isEditing && <Ionicons name="close-circle" size={16} color="#2563EB" style={{marginLeft: 4}}/>}
+                    </TouchableOpacity>
+                ))}
+            </View>
+
+            {/* Skill Selector (Only when editing) */}
+            {isEditing && (
+                <View style={{marginTop: 10}}>
+                    <View style={styles.skillInputContainer}>
+                        <TextInput 
+                            style={{flex:1}} 
+                            placeholder="Add a skill (e.g. React)" 
+                            value={skillInput}
+                            onChangeText={setSkillInput}
+                        />
+                        <TouchableOpacity onPress={() => skillInput && addSkill(skillInput)}>
+                            <Ionicons name="add-circle" size={28} color="#2563EB"/>
                         </TouchableOpacity>
                     </View>
-                </View>
-
-                {/* --- SKILLS --- */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Skills</Text>
-                    <View style={styles.skillsContainer}>
-                        {STUDENT.skills.map((skill, index) => (
-                            <View key={index} style={styles.skillBadge}>
-                                <Text style={styles.skillText}>{skill}</Text>
-                            </View>
-                        ))}
-                    </View>
-                </View>
-
-                {/* --- HORIZONTAL PROJECTS --- */}
-                <View style={styles.section}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                        <Text style={styles.sectionTitle}>Featured Projects 🚀</Text>
-                        <Text style={{ color: '#2563EB', fontSize: 12 }}>Scroll ➝</Text>
-                    </View>
-
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 20 }}>
-                        {STUDENT.projects.map((project) => (
-                            <View key={project.id} style={styles.projectCardHorizontal}>
-                                <View style={{ backgroundColor: '#F1F5F9' }}>
-                                    <Image
-                                        source={{ uri: project.image }}
-                                        style={styles.projectImage}
-                                        resizeMode="cover"
-                                    />
-                                </View>
-                                <View style={styles.projectContent}>
-                                    <Text style={styles.projectTitle} numberOfLines={1}>{project.title}</Text>
-                                    <Text style={styles.projectDesc} numberOfLines={2}>{project.description}</Text>
-
-                                    <View style={styles.techRow}>
-                                        {project.tech.slice(0, 2).map((t, i) => (
-                                            <Text key={i} style={styles.techText}>#{t}</Text>
-                                        ))}
-                                        {project.tech.length > 2 && <Text style={styles.techText}>+{project.tech.length - 2}</Text>}
-                                    </View>
-
-                                    <View style={styles.projectLinks}>
-                                        {Boolean(project.githubLink) && (
-                                            <TouchableOpacity style={styles.linkBtn} onPress={() => openLink(project.githubLink)}>
-                                                <Ionicons name="code-slash" size={14} color="#2563EB" />
-                                                <Text style={styles.linkText}>Code</Text>
-                                            </TouchableOpacity>
-                                        )}
-                                    </View>
-                                </View>
-                            </View>
+                    {/* Suggestions */}
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginTop: 8}}>
+                        {SUGGESTED_SKILLS.filter(s => !skillsArray.includes(s)).map((s, i) => (
+                            <TouchableOpacity key={i} style={styles.suggestionChip} onPress={() => addSkill(s)}>
+                                <Text style={styles.suggestionText}>+ {s}</Text>
+                            </TouchableOpacity>
                         ))}
                     </ScrollView>
                 </View>
+            )}
+          </View>
 
-                {/* --- CERTIFICATES --- */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Certifications</Text>
-                    {STUDENT.certificates.map((cert, index) => (
-                        <View key={index} style={styles.certRow}>
-                            <View style={styles.certIcon}>
-                                <Ionicons name="ribbon-outline" size={24} color="#F59E0B" />
+          {/* --- PROJECTS CAROUSEL (IMPROVED 🚀) --- */}
+          <View style={styles.sectionHeader}>
+            <Text style={styles.bigTitle}>Projects</Text>
+            <TouchableOpacity onPress={() => setProjectModalVisible(true)}>
+                <Text style={styles.addLink}>+ Add New</Text>
+            </TouchableOpacity>
+          </View>
+
+          {projects.length === 0 ? (
+            <TouchableOpacity style={styles.emptyProjectState} onPress={() => setProjectModalVisible(true)}>
+                <Ionicons name="briefcase-outline" size={32} color="#CBD5E1"/>
+                <Text style={styles.emptyText}>Add your first project</Text>
+            </TouchableOpacity>
+          ) : (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.carouselContent}>
+                {projects.map((project) => (
+                    <View key={project.id} style={styles.projectCard}>
+                        {/* Fake Cover Image / Header */}
+                        <View style={[styles.projectCover, {backgroundColor: project.color || '#3B82F6'}]}>
+                             <Ionicons name="laptop-outline" size={40} color="rgba(255,255,255,0.8)" />
+                             {/* Delete Button absolute positioned */}
+                             <TouchableOpacity style={styles.deleteProjectBtn} onPress={() => handleDeleteProject(project.id)}>
+                                <Ionicons name="trash" size={16} color="#FFF"/>
+                             </TouchableOpacity>
+                        </View>
+                        
+                        <View style={styles.projectBody}>
+                            <Text style={styles.projectTitle} numberOfLines={1}>{project.title}</Text>
+                            <Text style={styles.projectDesc} numberOfLines={2}>{project.desc}</Text>
+                            
+                            {/* Tech Tags Mini */}
+                            <View style={{flexDirection:'row', flexWrap:'wrap', gap: 4, marginBottom: 12}}>
+                                {project.tech.split(',').slice(0,2).map((t, i) => (
+                                    <View key={i} style={styles.miniTag}><Text style={styles.miniTagText}>{t.trim()}</Text></View>
+                                ))}
+                                {project.tech.split(',').length > 2 && <Text style={{fontSize:10, color:'#94A3B8'}}>...</Text>}
                             </View>
-                            <View style={{ flex: 1 }}>
-                                <Text style={styles.certTitle}>{cert.title}</Text>
-                                <Text style={styles.certIssuer}>{cert.issuer} • {cert.date}</Text>
+
+                            <View style={styles.projectActions}>
+                                {project.demoLink ? (
+                                    <TouchableOpacity style={[styles.btnSmall, {backgroundColor:'#0F172A'}]} onPress={() => openLink(project.demoLink)}>
+                                        <Text style={styles.btnSmallText}>Demo</Text>
+                                    </TouchableOpacity>
+                                ) : <View style={{flex:1}}/>} 
+                                
+                                {project.repoLink && (
+                                    <TouchableOpacity style={styles.iconBtn} onPress={() => openLink(project.repoLink)}>
+                                        <Ionicons name="logo-github" size={20} color="#0F172A"/>
+                                    </TouchableOpacity>
+                                )}
                             </View>
                         </View>
-                    ))}
-                </View>
-
-                {/* --- LOGOUT --- */}
-                <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-                    <Text style={styles.logoutText}>Sign Out</Text>
-                </TouchableOpacity>
-
-                <View style={{ height: 40 }} />
+                    </View>
+                ))}
             </ScrollView>
-        </SafeAreaView>
-    );
+          )}
+          
+          <View style={{height: 40}} /> 
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      {/* --- MODAL FOR NEW PROJECT --- */}
+      <Modal visible={isProjectModalVisible} animationType="slide" presentationStyle="pageSheet">
+        <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>New Project</Text>
+                <TouchableOpacity onPress={()=>setProjectModalVisible(false)}>
+                    <Ionicons name="close" size={24} color="#64748B"/>
+                </TouchableOpacity>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+                <Text style={styles.inputLabel}>Project Name</Text>
+                <TextInput style={styles.modalInput} placeholder="e.g. E-Commerce App" value={newProject.title} onChangeText={(t)=>setNewProject({...newProject, title: t})} />
+
+                <Text style={styles.inputLabel}>Description</Text>
+                <TextInput style={[styles.modalInput, {height: 80, textAlignVertical:'top'}]} multiline placeholder="What problem does it solve?" value={newProject.desc} onChangeText={(t)=>setNewProject({...newProject, desc: t})} />
+
+                <Text style={styles.inputLabel}>Tech Stack</Text>
+                <TextInput style={styles.modalInput} placeholder="React, Node.js, MongoDB" value={newProject.tech} onChangeText={(t)=>setNewProject({...newProject, tech: t})} />
+
+                <Text style={styles.inputLabel}>GitHub Link</Text>
+                <TextInput style={styles.modalInput} autoCapitalize="none" placeholder="https://github.com/..." value={newProject.repoLink} onChangeText={(t)=>setNewProject({...newProject, repoLink: t})} />
+
+                <Text style={styles.inputLabel}>Live Demo Link</Text>
+                <TextInput style={styles.modalInput} autoCapitalize="none" placeholder="https://..." value={newProject.demoLink} onChangeText={(t)=>setNewProject({...newProject, demoLink: t})} />
+                
+                <TouchableOpacity style={styles.saveBtn} onPress={handleAddProject}>
+                    <Text style={styles.saveBtnText}>Save Project</Text>
+                </TouchableOpacity>
+            </ScrollView>
+        </View>
+      </Modal>
+    </SafeAreaView>
+  );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#F8F9FA' },
-    content: { padding: 20 },
+  container: { flex: 1, backgroundColor: '#F1F5F9' }, // Pak më gri për kontrast
+  scrollContent: { padding: 20 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 
-    header: { alignItems: 'center', marginBottom: 24, backgroundColor: '#FFF', padding: 20, borderRadius: 20, elevation: 2 },
-    avatar: { width: 90, height: 90, borderRadius: 45, marginBottom: 12 },
-    name: { fontSize: 20, fontWeight: '800', color: '#1E293B' },
-    uni: { fontSize: 14, color: '#64748B', marginBottom: 4 },
-    locationTag: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-    locationText: { fontSize: 13, color: '#64748B', marginLeft: 4 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  headerTitle: { fontSize: 28, fontWeight: '800', color: '#0F172A' },
+  headerSubtitle: { fontSize: 14, color: '#64748B', fontWeight:'500' },
+  logoutBtn: { backgroundColor: '#FEF2F2', padding: 8, borderRadius: 12 },
 
-    bioText: { textAlign: 'center', fontSize: 14, color: '#475569', lineHeight: 20, marginBottom: 16, paddingHorizontal: 10, fontStyle: 'italic' },
+  // Profile Card
+  card: { backgroundColor: '#FFF', borderRadius: 24, padding: 20, marginBottom: 30, shadowColor: '#64748B', shadowOpacity: 0.08, shadowRadius: 10, elevation: 4 },
+  profileHeader: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  avatar: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#0F172A', justifyContent: 'center', alignItems: 'center' },
+  avatarText: { color: '#FFF', fontSize: 26, fontWeight: '700' },
+  nameText: { fontSize: 20, fontWeight: '700', color: '#0F172A' },
+  headlineText: { fontSize: 14, color: '#64748B', marginTop: 2 },
+  editBtn: { backgroundColor: '#2563EB', padding: 8, borderRadius: 20 },
+  
+  editInput: { borderBottomWidth: 1, borderColor: '#E2E8F0', paddingVertical: 6, fontSize: 15, color: '#0F172A', marginBottom: 4 },
+  textArea: { minHeight: 60, textAlignVertical: 'top' },
+  
+  divider: { height: 1, backgroundColor: '#F1F5F9', marginVertical: 16 },
+  sectionTitle: { fontSize: 13, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.5 },
+  bodyText: { fontSize: 15, color: '#334155', lineHeight: 22, marginTop: 6 },
 
-    socialRow: { flexDirection: 'row', gap: 12 },
-    socialBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' },
+  // Skills
+  skillsWrapper: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
+  skillChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#EFF6FF', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: '#DBEAFE' },
+  skillText: { color: '#2563EB', fontSize: 13, fontWeight: '600' },
+  skillInputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: 12, paddingHorizontal: 12, height: 44, marginTop: 10, borderWidth:1, borderColor:'#E2E8F0' },
+  suggestionChip: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#CBD5E1', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, marginRight: 8 },
+  suggestionText: { color: '#475569', fontSize: 12, fontWeight: '500' },
 
-    section: { marginBottom: 24 },
-    sectionTitle: { fontSize: 18, fontWeight: '700', color: '#1E293B' },
+  // Project Carousel
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  bigTitle: { fontSize: 20, fontWeight: '700', color: '#0F172A' },
+  addLink: { color: '#2563EB', fontWeight: '600', fontSize: 14 },
+  
+  carouselContent: { paddingRight: 20 }, // Spacing at end of scroll
+  projectCard: { width: 260, backgroundColor: '#FFF', borderRadius: 20, marginRight: 16, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 3, overflow: 'hidden' },
+  projectCover: { height: 100, justifyContent: 'center', alignItems: 'center', position: 'relative' },
+  deleteProjectBtn: { position: 'absolute', top: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.3)', padding: 6, borderRadius: 12 },
+  
+  projectBody: { padding: 16 },
+  projectTitle: { fontSize: 17, fontWeight: '700', color: '#0F172A', marginBottom: 4 },
+  projectDesc: { fontSize: 13, color: '#64748B', lineHeight: 18, marginBottom: 12, height: 36 }, // Fixed height for alignment
+  
+  miniTag: { backgroundColor: '#F1F5F9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  miniTagText: { fontSize: 10, color: '#475569', fontWeight: '600' },
 
-    skillsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
-    skillBadge: { backgroundColor: '#EFF6FF', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#DBEAFE' },
-    skillText: { color: '#2563EB', fontSize: 13, fontWeight: '500' },
+  projectActions: { flexDirection: 'row', alignItems: 'center', marginTop: 12, justifyContent: 'space-between' },
+  btnSmall: { backgroundColor: '#0F172A', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 10 },
+  btnSmallText: { color: '#FFF', fontSize: 12, fontWeight: '700' },
+  iconBtn: { padding: 6, backgroundColor: '#F1F5F9', borderRadius: 10 },
 
-    projectCardHorizontal: {
-        backgroundColor: '#FFF',
-        borderRadius: 16,
-        width: 240,
-        marginRight: 16,
-        elevation: 2,
-        borderWidth: 1,
-        borderColor: '#F1F5F9',
-        overflow: 'hidden'
-    },
-    projectImage: { width: '100%', height: 130 },
-    projectContent: { padding: 12 },
-    projectTitle: { fontSize: 16, fontWeight: '700', color: '#1E293B', marginBottom: 4 },
-    projectDesc: { fontSize: 13, color: '#64748B', marginBottom: 8, height: 36 },
-    techRow: { flexDirection: 'row', gap: 6, marginBottom: 12, flexWrap: 'wrap' },
-    techText: { fontSize: 11, color: '#94A3B8', fontWeight: '600', backgroundColor: '#F8F9FA', paddingHorizontal: 4, borderRadius: 4 },
+  emptyProjectState: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 20, backgroundColor: '#FFF', borderRadius: 16, borderStyle: 'dashed', borderWidth: 2, borderColor: '#E2E8F0', gap: 10 },
+  emptyText: { color: '#94A3B8', fontWeight: '600' },
 
-    projectLinks: { flexDirection: 'row', alignItems: 'center' },
-    linkBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#EFF6FF', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6 },
-    linkText: { fontSize: 12, fontWeight: '600', color: '#2563EB', marginLeft: 4 },
-
-    certRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', padding: 12, borderRadius: 12, marginBottom: 8, borderWidth: 1, borderColor: '#F1F5F9', marginTop: 8 },
-    certIcon: { width: 36, height: 36, backgroundColor: '#FFFBEB', borderRadius: 18, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-    certTitle: { fontSize: 14, fontWeight: '600', color: '#1E293B' },
-    certIssuer: { fontSize: 12, color: '#64748B' },
-
-    logoutButton: { backgroundColor: '#FFF1F2', padding: 16, borderRadius: 16, alignItems: 'center', marginTop: 10, borderWidth: 1, borderColor: '#FECDD3' },
-    logoutText: { color: '#E11D48', fontWeight: '700', fontSize: 16 },
+  // Modal
+  modalContainer: { flex: 1, backgroundColor: '#F8FAFC', padding: 24 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
+  modalTitle: { fontSize: 22, fontWeight: '800', color: '#0F172A' },
+  inputLabel: { fontSize: 14, fontWeight: '600', color: '#334155', marginBottom: 6, marginTop: 16 },
+  modalInput: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 12, padding: 14, fontSize: 16 },
+  saveBtn: { backgroundColor: '#2563EB', padding: 16, borderRadius: 16, alignItems: 'center', marginTop: 32 },
+  saveBtnText: { color: '#FFF', fontWeight: '700', fontSize: 16 }
 });

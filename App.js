@@ -1,63 +1,93 @@
 import React from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, Text, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons'; 
 
-// KUJDES: AuthContext është brenda src/contexts
+// Context
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 
-// --- IMPORTET E REJA (Sipas folderave që krijuam) ---
+// --- SCREENS IMPORT ---
 
-// 1. Auth (Login) - Tani ndodhet te src/screens/auth/
+// 1. Auth
 import LoginScreen from './src/screens/auth/LoginScreen';
 
-// 2. Student Screens - Tani ndodhen te src/screens/student/
+// 2. Profile Completion (NEW ✅)
+import CompleteStudentProfileScreen from './src/screens/student/CompleteStudentProfileScreen';
+import CompleteEmployerProfileScreen from './src/screens/employer/CompleteEmployerProfileScreen';
+
+// 3. Student Screens
 import MainLayout from './src/screens/student/MainLayout';
 import JobDetailsScreen from './src/screens/student/JobDetailsScreen';
 
-// 3. Employer Screens - Tani ndodhen te src/screens/employer/
+// 4. Employer Screens
 import EmployerHomeScreen from './src/screens/employer/EmployerHomeScreen';
 import PostJobScreen from './src/screens/employer/PostJobScreen';
+import JobApplicantsScreen from './src/screens/employer/JobApplicantsScreen';
 
 const Stack = createNativeStackNavigator();
 
 const MainApp = () => {
-  // Marrim userin dhe rolin nga AuthContext
-  const { user, userRole, loading } = useAuth();
+  // ✅ UPDATE: Added 'userData' to check isProfileComplete
+  const { user, userRole, loading, userData } = useAuth();
 
-  // 1. Loading State (sa kohë presim Firebase-in)
+  // 1. Loading State (Branded Splash Screen)
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8F9FA' }}>
-        <ActivityIndicator size="large" color="#2563EB" />
+      <View style={styles.loadingContainer}>
+        <View style={styles.logoBox}>
+            <Ionicons name="flash" size={50} color="#2563EB" />
+        </View>
+        <Text style={styles.loadingText}>SkillCast</Text>
+        <ActivityIndicator size="large" color="#2563EB" style={{ marginTop: 24 }} />
       </View>
     );
   }
 
-  // 2. Nëse useri NUK është i loguar -> Shfaq Login
-  if (!user) {
+  // 2. CHECK LOGIN & VERIFICATION STATUS
+  // If user is not logged in OR email is not verified, show LoginScreen.
+  if (!user || !user.emailVerified) {
     return <LoginScreen />;
   }
 
-  // 3. Nëse është EMPLOYER -> Shfaq panelin e Punëdhënësit
+  // 3. CHECK PROFILE COMPLETION (NEW LOGIC ✅)
+  // Nëse useri është i verifikuar, por nuk e ka profilin e plotësuar:
+  if (userData && userData.isProfileComplete === false) {
+      if (userRole === 'student') {
+          // Shfaq formën për Studentin pa Navigation Stack (Force Mode)
+          return <CompleteStudentProfileScreen />;
+      } else {
+          // ✅ Tani shfaqim formën e Employerit sepse është krijuar
+          return <CompleteEmployerProfileScreen />;
+      }
+  }
+
+  // ---------------------------------------------------------
+  // If we reach here: User is Logged In, Verified AND Profile is Complete ✅
+  // ---------------------------------------------------------
+
+  // 4. Employer Navigation Flow
   if (userRole === 'employer') {
     return (
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="EmployerHome" component={EmployerHomeScreen} />
         <Stack.Screen name="PostJob" component={PostJobScreen} />
-        {/* E lëmë JobDetails edhe këtu, nëse employer do të shohë si duket puna */}
+        {/* Allows Employer to preview job details */}
         <Stack.Screen name="JobDetails" component={JobDetailsScreen} />
+        
+        {/* Applicants Screen */}
+        <Stack.Screen name="JobApplicants" component={JobApplicantsScreen} />
       </Stack.Navigator>
     );
   }
 
-  // 4. Nëse është STUDENT (ose Default) -> Shfaq panelin e Studentit
+  // 5. Student Navigation Flow (Default)
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-      {/* 'Main' përmban Tabet (Home, Applications, Profile) */}
+      {/* 'Main' contains the Tabs (Home, Applications, Profile) */}
       <Stack.Screen name="Main" component={MainLayout} />
       
-      {/* 'JobDetails' hapet SIPËR tabeve kur klikon një punë */}
+      {/* 'JobDetails' opens on top of tabs when a job is clicked */}
       <Stack.Screen name="JobDetails" component={JobDetailsScreen} />
     </Stack.Navigator>
   );
@@ -72,3 +102,27 @@ export default function App() {
     </AuthProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FFF', 
+  },
+  logoBox: {
+    width: 80,
+    height: 80,
+    borderRadius: 20,
+    backgroundColor: '#EFF6FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16
+  },
+  loadingText: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#1E293B',
+    letterSpacing: 1
+  }
+});

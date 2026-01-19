@@ -1,8 +1,11 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { Platform, Keyboard } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { db, auth } from '../../config/firebase'; // ✅ Sigurohu për path-in
 
-// Importojmë ekranet nga i njëjti folder
+// Importojmë ekranet
 import HomeScreen from './HomeScreen';
 import ProfileScreen from './ProfileScreen';
 import ApplicationsScreen from './ApplicationsScreen';
@@ -10,21 +13,43 @@ import ApplicationsScreen from './ApplicationsScreen';
 const Tab = createBottomTabNavigator();
 
 export default function MainLayout() {
+    const [applicationCount, setApplicationCount] = useState(0);
+    const user = auth.currentUser;
+
+    // 1. Logjika "Senior": Live Badge Counter
+    // Dëgjon në kohë reale sa aplikime ka bërë studenti
+    useEffect(() => {
+        if (!user) return;
+
+        const q = query(
+            collection(db, "applications"),
+            where("studentId", "==", user.uid)
+        );
+
+        // onSnapshot dëgjon çdo ndryshim në databazë
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            setApplicationCount(snapshot.size); // Përditëson numrin te ikona
+        });
+
+        return () => unsubscribe();
+    }, [user]);
+
     return (
         <Tab.Navigator
             screenOptions={({ route }) => ({
                 headerShown: false,
                 tabBarShowLabel: true,
+                tabBarHideOnKeyboard: true, // ✅ Mshef menunë kur hapet tastiera (UX Pro)
                 tabBarStyle: {
                     backgroundColor: '#FFFFFF',
                     borderTopWidth: 0,
-                    elevation: 10,
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: -2 },
+                    elevation: 10, // Për Android
+                    shadowColor: '#000', // Për iOS
+                    shadowOffset: { width: 0, height: -4 },
                     shadowOpacity: 0.05,
                     shadowRadius: 10,
-                    height: 65,
-                    paddingBottom: 8,
+                    height: Platform.OS === 'ios' ? 85 : 65, // Rregullim për iPhone X+
+                    paddingBottom: Platform.OS === 'ios' ? 30 : 10,
                     paddingTop: 8,
                 },
                 tabBarActiveTintColor: '#2563EB',
@@ -54,11 +79,22 @@ export default function MainLayout() {
                 component={HomeScreen}
                 options={{ title: 'Jobs' }}
             />
+            
             <Tab.Screen
                 name="Applications"
                 component={ApplicationsScreen}
-                options={{ title: 'Applications' }}
+                options={{ 
+                    title: 'Applications',
+                    // ✅ MARKET-READY: Tregon numrin e aplikimeve mbi ikonë
+                    tabBarBadge: applicationCount > 0 ? applicationCount : null,
+                    tabBarBadgeStyle: { 
+                        backgroundColor: '#EF4444', 
+                        fontSize: 12,
+                        fontWeight: 'bold' 
+                    }
+                }}
             />
+            
             <Tab.Screen
                 name="Profile"
                 component={ProfileScreen}

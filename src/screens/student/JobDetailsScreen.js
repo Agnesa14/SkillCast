@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { 
     View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, 
-    Modal, TextInput, KeyboardAvoidingView, Platform, Linking 
+    Modal, TextInput, KeyboardAvoidingView, Platform, Share 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { auth, db } from '../../config/firebase'; // ✅ Rruga është e saktë
+import { auth, db } from '../../config/firebase'; 
 import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function JobDetailsScreen({ route, navigation }) {
-    // Marrim të dhënat e punës nga ekrani i mëparshëm
+    // Get data passed from HomeScreen
     const { job } = route.params; 
     const user = auth.currentUser;
 
@@ -17,20 +17,23 @@ export default function JobDetailsScreen({ route, navigation }) {
     const [hasApplied, setHasApplied] = useState(false);
     const [checkingStatus, setCheckingStatus] = useState(true);
 
-    // Për Modalin e Aplikimit
+    // Modal State
     const [modalVisible, setModalVisible] = useState(false);
     const [coverLetter, setCoverLetter] = useState('');
 
-    // Marrim listën e aftësive (mbështet edhe 'skills' edhe 'tags')
+    // Handle Skills (support both array formats)
     const jobSkills = job.skills || job.tags || [];
 
     useEffect(() => {
         checkApplicationStatus();
     }, []);
 
-    // 1. Kontrollojmë nëse studenti ka aplikuar më parë
+    // 1. Check if already applied
     const checkApplicationStatus = async () => {
-        if (!user) return;
+        if (!user) {
+            setCheckingStatus(false);
+            return;
+        }
         try {
             const q = query(
                 collection(db, "applications"),
@@ -46,6 +49,17 @@ export default function JobDetailsScreen({ route, navigation }) {
         }
     };
 
+    // 2. Share Functionality (Professional Feature)
+    const handleShare = async () => {
+        try {
+            await Share.share({
+                message: `Check out this job: ${job.title} at ${job.companyName}. Apply via SkillCast!`,
+            });
+        } catch (error) {
+            console.error(error.message);
+        }
+    };
+
     const openApplyModal = () => {
         if (!user) {
             Alert.alert("Login Required", "Please login to apply for jobs.");
@@ -54,29 +68,29 @@ export default function JobDetailsScreen({ route, navigation }) {
         setModalVisible(true);
     };
 
-    // 2. Dërgimi i Aplikimit në Firebase
+    // 3. Submit Application to Firebase
     const submitApplication = async () => {
         if (!coverLetter.trim()) {
-            Alert.alert("Error", "Please write a short note/cover letter.");
+            Alert.alert("Missing Info", "Please write a short cover letter to stand out.");
             return;
         }
 
         setApplying(true);
         try {
             await addDoc(collection(db, "applications"), {
-                // Të dhënat e Punës
+                // Job Details
                 jobId: job.id,
                 jobTitle: job.title,
-                companyName: job.company,
-                employerId: job.employerId, // E RËNDËSISHME: Që ta shohë punëdhënësi
+                companyName: job.companyName || job.company, // Handle both naming conventions
+                employerId: job.employerId || "unknown", // Crash prevention
                 
-                // Të dhënat e Studentit
+                // Student Details
                 studentId: user.uid,
-                studentName: user.displayName || 'Student',
+                studentName: user.displayName || user.email.split('@')[0],
                 studentEmail: user.email,
-                coverLetter: coverLetter,
+                coverLetter: coverLetter.trim(),
                 
-                // Meta të dhëna
+                // Metadata
                 status: 'pending',
                 appliedAt: serverTimestamp(),
             });
@@ -84,23 +98,20 @@ export default function JobDetailsScreen({ route, navigation }) {
             setHasApplied(true);
             setModalVisible(false);
 
+            // Delay alert slightly for better UX
             setTimeout(() => {
-                Alert.alert("Success!", "Your application has been sent to the recruiter. 🚀");
+                Alert.alert("Success! 🚀", "Your application has been sent to the employer.");
             }, 500);
 
         } catch (error) {
             console.error(error);
-            Alert.alert("Error", "Could not submit application. Try again.");
+            Alert.alert("Error", "Could not submit application. Please try again.");
         } finally {
             setApplying(false);
         }
     };
 
-    const openLink = (url) => {
-        if (url) Linking.openURL(url.startsWith('http') ? url : `https://${url}`);
-    };
-
-    // Butoni poshtë ndryshon në varësi të statusit
+    // Render Logic for the Bottom Button
     const renderActionButton = () => {
         if (checkingStatus) {
             return (
@@ -124,43 +135,60 @@ export default function JobDetailsScreen({ route, navigation }) {
         );
     };
 
+    // Date Formatter Helper
+    const formatDate = (timestamp) => {
+        if (!timestamp) return 'Recently';
+        // Handle both Firebase Timestamp and regular Date objects
+        const date = timestamp.seconds ? new Date(timestamp.seconds * 1000) : new Date(timestamp);
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    };
+
     return (
         <SafeAreaView style={styles.container}>
             {/* Header */}
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconButton}>
                     <Ionicons name="arrow-back" size={24} color="#1E293B" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Job Details</Text>
-                <View style={{ width: 40 }} />
+                <TouchableOpacity onPress={handleShare} style={styles.iconButton}>
+                    <Ionicons name="share-outline" size={24} color="#1E293B" />
+                </TouchableOpacity>
             </View>
 
             <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-                {/* Job Header Info */}
+                {/* Top Section */}
                 <View style={styles.topSection}>
                     <View style={styles.logoContainer}>
-                        <Text style={styles.logoText}>{job.company ? job.company.charAt(0) : '?'}</Text>
+                        <Text style={styles.logoText}>
+                            {(job.companyName || job.company || '?').charAt(0).toUpperCase()}
+                        </Text>
                     </View>
                     <Text style={styles.jobTitle}>{job.title}</Text>
-                    <Text style={styles.companyName}>{job.company}</Text>
+                    <Text style={styles.companyName}>{job.companyName || job.company}</Text>
 
                     <View style={styles.tagsRow}>
-                        <View style={styles.badge}><Text style={styles.badgeText}>{job.salary || 'Negotiable'}</Text></View>
-                        <View style={styles.badge}><Text style={styles.badgeText}>Full-Time</Text></View>
+                        <View style={styles.badge}>
+                            <Text style={styles.badgeText}>{job.salary || 'Negotiable'}</Text>
+                        </View>
+                        <View style={styles.badge}>
+                            <Text style={styles.badgeText}>Full-Time</Text>
+                        </View>
                     </View>
                 </View>
 
                 <View style={styles.divider} />
 
-                {/* Description */}
+                {/* Job Description */}
                 <Text style={styles.sectionTitle}>About the Role</Text>
                 <Text style={styles.description}>
-                    {job.description || "No description provided."}
+                    {job.description || "No detailed description provided for this role."}
                 </Text>
 
-                {/* Skills Section */}
+                {/* Requirements / Skills */}
                 {jobSkills.length > 0 && (
                     <>
+                        <View style={{ height: 24 }} />
                         <Text style={styles.sectionTitle}>Requirements & Skills</Text>
                         <View style={styles.reqList}>
                             {jobSkills.map((skill, index) => (
@@ -170,12 +198,13 @@ export default function JobDetailsScreen({ route, navigation }) {
                                 </View>
                             ))}
                         </View>
-                        <View style={styles.divider} />
                     </>
                 )}
 
-                {/* Company Contact Info */}
-                <Text style={styles.sectionTitle}>Company Details</Text>
+                <View style={{ height: 24 }} />
+
+                {/* Company & Meta Info */}
+                <Text style={styles.sectionTitle}>Details</Text>
                 <View style={styles.companyCard}>
                     <View style={styles.contactContainer}>
                         <View style={styles.contactRow}>
@@ -184,7 +213,7 @@ export default function JobDetailsScreen({ route, navigation }) {
                             </View>
                             <View>
                                 <Text style={styles.contactLabel}>Contact Email</Text>
-                                <Text style={styles.contactValue}>{job.employerEmail || 'Hidden'}</Text>
+                                <Text style={styles.contactValue}>{job.employerEmail || 'Protected'}</Text>
                             </View>
                         </View>
 
@@ -193,10 +222,8 @@ export default function JobDetailsScreen({ route, navigation }) {
                                 <Ionicons name="calendar-outline" size={20} color="#2563EB" />
                             </View>
                             <View>
-                                <Text style={styles.contactLabel}>Posted Date</Text>
-                                <Text style={styles.contactValue}>
-                                    {job.createdAt?.seconds ? new Date(job.createdAt.seconds * 1000).toLocaleDateString() : 'Recently'}
-                                </Text>
+                                <Text style={styles.contactLabel}>Posted On</Text>
+                                <Text style={styles.contactValue}>{formatDate(job.createdAt)}</Text>
                             </View>
                         </View>
                     </View>
@@ -205,7 +232,7 @@ export default function JobDetailsScreen({ route, navigation }) {
                 <View style={{ height: 40 }} />
             </ScrollView>
 
-            {/* Footer Apply Button */}
+            {/* Footer Action */}
             <View style={styles.footer}>
                 {renderActionButton()}
             </View>
@@ -215,7 +242,7 @@ export default function JobDetailsScreen({ route, navigation }) {
                 <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>Apply to {job.company}</Text>
+                            <Text style={styles.modalTitle}>Apply to {job.companyName || job.company}</Text>
                             <TouchableOpacity onPress={() => setModalVisible(false)}>
                                 <Ionicons name="close" size={24} color="#64748B" />
                             </TouchableOpacity>
@@ -224,10 +251,12 @@ export default function JobDetailsScreen({ route, navigation }) {
                         <Text style={styles.modalSubtitle}>Why are you a good fit? (Cover Letter)</Text>
                         <TextInput 
                             style={styles.textInput} 
-                            placeholder="Hello, I have experience with React Native..." 
+                            placeholder="Hello, I have experience with..." 
                             placeholderTextColor="#94A3B8"
-                            multiline numberOfLines={4}
-                            value={coverLetter} onChangeText={setCoverLetter}
+                            multiline 
+                            numberOfLines={4}
+                            value={coverLetter} 
+                            onChangeText={setCoverLetter}
                         />
 
                         <View style={styles.infoBox}>
@@ -247,11 +276,15 @@ export default function JobDetailsScreen({ route, navigation }) {
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#FFF' },
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20 },
-    backButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' },
-    headerTitle: { fontSize: 18, fontWeight: '700' },
     
-    content: { padding: 24, paddingTop: 0 },
+    // Header
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+    iconButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F8F9FA', justifyContent: 'center', alignItems: 'center' },
+    headerTitle: { fontSize: 16, fontWeight: '700', color: '#1E293B' },
+    
+    content: { padding: 24, paddingTop: 20 },
+    
+    // Top Section
     topSection: { alignItems: 'center', marginBottom: 24 },
     logoContainer: { width: 80, height: 80, borderRadius: 20, backgroundColor: '#F8F9FA', justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
     logoText: { fontSize: 32, fontWeight: '800', color: '#64748B' },
@@ -262,9 +295,10 @@ const styles = StyleSheet.create({
     badge: { backgroundColor: '#EFF6FF', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
     badgeText: { color: '#2563EB', fontWeight: '600' },
     
-    divider: { height: 1, backgroundColor: '#F1F5F9', marginVertical: 24 },
+    divider: { height: 1, backgroundColor: '#F1F5F9', marginBottom: 24 },
+    
     sectionTitle: { fontSize: 18, fontWeight: '700', color: '#1E293B', marginBottom: 12 },
-    description: { fontSize: 16, color: '#475569', lineHeight: 24 },
+    description: { fontSize: 16, color: '#475569', lineHeight: 26 },
     
     reqList: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
     reqItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8F9FA', padding: 10, borderRadius: 10, gap: 8 },
@@ -278,11 +312,12 @@ const styles = StyleSheet.create({
     contactValue: { fontSize: 14, color: '#1E293B', fontWeight: '500' },
 
     footer: { padding: 24, borderTopWidth: 1, borderTopColor: '#F1F5F9', backgroundColor: '#FFF' },
-    applyButton: { backgroundColor: '#2563EB', height: 56, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
+    applyButton: { backgroundColor: '#2563EB', height: 56, borderRadius: 16, justifyContent: 'center', alignItems: 'center', shadowColor: '#2563EB', shadowOpacity: 0.3, shadowRadius: 10, elevation: 5 },
     applyText: { color: '#FFF', fontSize: 18, fontWeight: '700' },
-    disabledButton: { backgroundColor: '#F1F5F9' },
+    disabledButton: { backgroundColor: '#F1F5F9', shadowOpacity: 0 },
     appliedButton: { backgroundColor: '#10B981', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', height: 56, borderRadius: 16 },
 
+    // Modal
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
     modalContent: { backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, minHeight: 450 },
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
